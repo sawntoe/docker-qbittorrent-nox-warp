@@ -1,5 +1,6 @@
-# create an up-to-date base image for everything
-FROM debian:sid AS base
+# debian sid june 2025
+FROM debian@sha256:821e234e310d8d585cc4d09ad52e03b5e76115be3b888698ea48dc3275c6d836 AS base
+
 
 RUN \
   apt-get update && apt-get upgrade -y
