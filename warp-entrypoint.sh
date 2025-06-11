@@ -52,3 +52,5 @@ until ip a | grep "CloudflareWARP"
 do 
     sleep $WARP_SLEEP
 done
+
+sudo /qbt-entrypoint.sh

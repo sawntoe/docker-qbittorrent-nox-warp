@@ -156,14 +156,16 @@ RUN \
 FROM base
 
 RUN \
-  useradd -m -s /bin/bash -u 1000 qbtUser && \
+  useradd -M -s /sbin/nologin -u 1000 qbtUser && \
+  useradd -m -s /bin/bash warp && \
   echo "qbtUser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/qbt && \
-  echo 'Defaults env_keep += "WARP_SLEEP REGISTER_WHEN_MDM_EXISTS WARP_LICENSE_KEY WARP_ENABLE_NAT"' > /etc/sudoers.d/env_keep
+  echo "warp ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/warp && \
+  echo 'Defaults env_keep += "WARP_SLEEP REGISTER_WHEN_MDM_EXISTS WARP_LICENSE_KEY WARP_ENABLE_NAT QBT_LEGAL_NOTICE QBT_WEBUI_PORT"' > /etc/sudoers.d/env_keep
 
-USER qbtUser
+USER warp
 
-RUN mkdir -p /home/qbtUser/.local/share/warp && \
-    echo -n 'yes' > /home/qbtUser/.local/share/warp/accepted-tos.txt
+RUN mkdir -p /home/warp/.local/share/warp && \
+    echo -n 'yes' > /home/warp/.local/share/warp/accepted-tos.txt
 
 ENV WARP_SLEEP=5
 ENV REGISTER_WHEN_MDM_EXISTS=

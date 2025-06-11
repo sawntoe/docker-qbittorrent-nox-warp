@@ -2,5 +2,4 @@
 
 set -e
 
-sudo -u qbtUser /warp-entrypoint.sh
-/qbt-entrypoint.sh
+sudo -u warp /warp-entrypoint.sh
