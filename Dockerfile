@@ -1,24 +1,34 @@
 # create an up-to-date base image for everything
-FROM alpine:latest AS base
+FROM debian:sid AS base
 
 RUN \
-  apk --no-cache --update-cache upgrade
+  apt-get update && apt-get upgrade -y
 
 # run-time dependencies
+
 RUN \
-  apk --no-cache add \
+  apt-get install -y \
     7zip \
     bash \
     curl \
-    doas \
-    libcrypto3 \
+    openssl \
+    qt6-base-dev \
+    libqt6sql6-sqlite \
+    qt6-base-private-dev \
     libssl3 \
     python3 \
-    qt6-qtbase \
-    qt6-qtbase-sqlite \
     tini \
     tzdata \
-    zlib
+    zlib1g \
+    gnupg \
+    lsb-release \
+    sudo \
+    jq \
+    ipcalc
+
+RUN curl https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ bookworm main" | tee /etc/apt/sources.list.d/cloudflare-client.list
+RUN apt-get update && apt-get install -y cloudflare-warp && apt-get clean && apt-get autoremove -y
 
 # image for building
 FROM base AS builder
@@ -40,18 +50,23 @@ RUN \
 # alpine linux packages:
 # https://git.alpinelinux.org/aports/tree/community/libtorrent-rasterbar/APKBUILD
 # https://git.alpinelinux.org/aports/tree/community/qbittorrent/APKBUILD
+
+RUN echo "deb http://deb.debian.org/debian sid main" > /etc/apt/sources.list.d/sid.list \
+ && printf "Package: *\nPin: release a=unstable\nPin-Priority: 100\n\n" > /etc/apt/preferences.d/pin-sid > /etc/apt/preferences.d/pin-sid \
+ && apt-get update
+
 RUN \
-  apk add \
+  apt-get install -y \
+    wget \
     cmake \
     git \
     g++ \
     make \
-    ninja \
-    openssl-dev \
-    qt6-qtbase-dev \
-    qt6-qtbase-private-dev \
-    qt6-qttools-dev \
-    zlib-dev
+    ninja-build \
+    libssl-dev \
+    zlib1g-dev \
+    qt6-tools-dev-tools \
+    qt6-tools-dev
 
 # compiler, linker options:
 # https://gcc.gnu.org/onlinedocs/gcc/Option-Summary.html
@@ -134,25 +149,35 @@ RUN \
     echo "qBittorrent ${QBT_VERSION}" >> /sbom.txt ; \
   fi && \
   echo >> /sbom.txt && \
-  apk list -I | sort >> /sbom.txt && \
+  apt list --installed | sort >> /sbom.txt && \
   cat /sbom.txt
 
 # image for running
 FROM base
 
 RUN \
-  adduser \
-    -D \
-    -H \
-    -s /sbin/nologin \
-    -u 1000 \
-    qbtUser && \
-  echo "permit nopass :root" >> "/etc/doas.d/doas.conf"
+  useradd -m -s /bin/bash -u 1000 qbtUser && \
+  echo "qbtUser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/qbt && \
+  echo 'Defaults env_keep += "WARP_SLEEP REGISTER_WHEN_MDM_EXISTS WARP_LICENSE_KEY WARP_ENABLE_NAT"' > /etc/sudoers.d/env_keep
+
+USER qbtUser
+
+RUN mkdir -p /home/qbtUser/.local/share/warp && \
+    echo -n 'yes' > /home/qbtUser/.local/share/warp/accepted-tos.txt
+
+ENV WARP_SLEEP=5
+ENV REGISTER_WHEN_MDM_EXISTS=
+ENV WARP_LICENSE_KEY=
+ENV WARP_ENABLE_NAT=
+
+USER root
 
 COPY --from=builder /usr/bin/qbittorrent-nox /usr/bin/qbittorrent-nox
 
 COPY --from=builder /sbom.txt /sbom.txt
 
 COPY entrypoint.sh /entrypoint.sh
+COPY qbt-entrypoint.sh /qbt-entrypoint.sh
+COPY warp-entrypoint.sh /warp-entrypoint.sh
 
-ENTRYPOINT ["/sbin/tini", "-g", "--", "/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/entrypoint.sh"]
